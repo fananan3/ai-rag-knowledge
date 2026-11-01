@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 对话 · 流式演示</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz@14..32&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: #f7f9fc;
+    }
+    .chat-scroll::-webkit-scrollbar { width: 6px; }
+    .chat-scroll::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+    .chat-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    .chat-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    .streaming-cursor::after {
+      content: '▍';
+      display: inline-block;
+      margin-left: 2px;
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+  </style>
+</head>
+<body class="h-screen flex items-center justify-center p-4">
+<div class="w-full max-w-3xl h-[90vh] bg-white rounded-2xl shadow-xl flex flex-col overflow-hidden border border-gray-100">
+  <!-- 头部 -->
+  <header class="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-white/80 backdrop-blur-sm">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-sm">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      </div>
+      <h1 class="text-lg font-semibold text-gray-800">Ollama 对话</h1>
+    </div>
+    <div class="flex items-center gap-2">
+                <span id="modelLabel" class="text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 font-mono border border-gray-200">
+                    deepseek-r1:1.5b
+                </span>
+      <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+    </div>
+  </header>
+
+  <!-- 对话区域 -->
+  <main id="chatContainer" class="flex-1 overflow-y-auto p-5 space-y-4 chat-scroll bg-gray-50/30">
+    <div id="messages" class="space-y-4">
+      <div class="flex items-start gap-3">
+        <div class="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-sm font-medium">
+          AI
+        </div>
+        <div class="bg-white rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm border border-gray-100 max-w-[85%]">
+          <p class="text-gray-700 text-sm leading-relaxed">你好！我是基于 Ollama 的 AI 助手，输入问题开始对话吧。</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 输入区域 -->
+  <footer class="p-4 border-t border-gray-100 bg-white">
+    <div class="flex items-end gap-2">
+      <div class="flex-1 relative">
+                    <textarea id="messageInput" rows="1" placeholder="输入消息..."
+                              class="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 pr-12 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all placeholder:text-gray-400 bg-gray-50/50"
+                              style="min-height: 48px; max-height: 120px;"></textarea>
+      </div>
+      <button id="sendBtn"
+              class="flex-shrink-0 h-12 w-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 active:scale-95 transition-all text-white shadow-md shadow-blue-200 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+        </svg>
+      </button>
+    </div>
+    <p class="text-[10px] text-gray-400 text-center mt-2">流式响应 · 内容实时生成</p>
+  </footer>
+</div>
+
+<script>
+  (function() {
+    // ========== 配置区域（根据你的实际地址调整） ==========
+    const API_BASE = 'http://localhost:8090/api/v1/ollama/generate_stream';
+    const MODEL = 'deepseek-r1:1.5b'; // 你的模型名
+    // =====================================================
+
+    // DOM 元素
+    const chatContainer = document.getElementById('chatContainer');
+    const messagesDiv = document.getElementById('messages');
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const modelLabel = document.getElementById('modelLabel');
+
+    // 显示模型名
+    modelLabel.textContent = MODEL;
+
+    let currentEventSource = null;
+    let currentAiMessageContentEl = null;
+    let isGenerating = false;
+
+    function scrollToBottom() {
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function adjustTextareaHeight() {
+      messageInput.style.height = 'auto';
+      messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
+    }
+    messageInput.addEventListener('input', adjustTextareaHeight);
+
+    function escapeHtml(unsafe) {
+      return unsafe
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;")
+              .replace(/"/g, "&quot;")
+              .replace(/'/g, "&#039;");
+    }
+
+    function addUserMessage(text) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'flex items-start gap-3 justify-end';
+      wrapper.innerHTML = `
+                    <div class="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl rounded-tr-sm px-4 py-3 shadow-sm max-w-[85%]">
+                        <p class="text-white text-sm leading-relaxed whitespace-pre-wrap">${escapeHtml(text)}</p>
+                    </div>
+                    <div class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-sm font-medium">
+                        你
+                    </div>
+                `;
+      messagesDiv.appendChild(wrapper);
+      scrollToBottom();
+    }
+
+    function addAiMessagePlaceholder() {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'flex items-start gap-3';
+      wrapper.innerHTML = `
+                    <div class="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-sm font-medium">
+                        AI
+                    </div>
+                    <div class="bg-white rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm border border-gray-100 max-w-[85%] w-full">
+                        <div class="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap min-h-[1.5rem]">
+                            <span class="streaming-cursor"></span>
+                        </div>
+                    </div>
+                `;
+      messagesDiv.appendChild(wrapper);
+      scrollToBottom();
+      return wrapper.querySelector('.text-gray-700');
+    }
+
+    // 从响应对象中提取 content（兼容多种结构）
+    function extractContent(data) {
+      try {
+        let root = Array.isArray(data) ? data[0] : data;
+        // Spring AI ChatResponse 结构: results[0].output.content
+        if (root?.results?.[0]?.output?.content !== undefined) {
+          return root.results[0].output.content;
+        }
+        // 直接 output.content
+        if (root?.output?.content !== undefined) {
+          return root.output.content;
+        }
+        // 纯字符串
+        if (typeof root === 'string') return root;
+        // 直接 content
+        if (root?.content !== undefined) return root.content;
+        return null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // 从响应中提取 finishReason，判断 STOP
+    function isResponseEnd(data) {
+      try {
+        let root = Array.isArray(data) ? data[0] : data;
+        // results[0].metadata.finishReason
+        if (root?.results?.[0]?.metadata?.finishReason === 'STOP') return true;
+        // metadata.finishReason
+        if (root?.metadata?.finishReason === 'STOP') return true;
+        // output.metadata.finishReason
+        if (root?.output?.metadata?.finishReason === 'STOP') return true;
+        return false;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function closeCurrentEventSource() {
+      if (currentEventSource) {
+        currentEventSource.close();
+        currentEventSource = null;
+      }
+      if (currentAiMessageContentEl) {
+        const cursorSpan = currentAiMessageContentEl.querySelector('.streaming-cursor');
+        if (cursorSpan) cursorSpan.remove();
+        currentAiMessageContentEl = null;
+      }
+      isGenerating = false;
+      sendBtn.disabled = false;
+      messageInput.disabled = false;
+      sendBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+
+    function sendMessage() {
+      const text = messageInput.value.trim();
+      if (!text || isGenerating) return;
+
+      if (currentEventSource) closeCurrentEventSource();
+
+      messageInput.value = '';
+      adjustTextareaHeight();
+
+      addUserMessage(text);
+      currentAiMessageContentEl = addAiMessagePlaceholder();
+      currentAiMessageContentEl.innerHTML = '<span class="streaming-cursor"></span>';
+      scrollToBottom();
+
+      isGenerating = true;
+      sendBtn.disabled = true;
+      messageInput.disabled = true;
+      sendBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+      // 拼接请求地址：http://localhost:8090/api/v1/ollama/generate_stream?model=deepseek-r1:1.5b&message=xxx
+      const apiUrl = `${API_BASE}?model=${encodeURIComponent(MODEL)}&message=${encodeURIComponent(text)}`;
+      console.log('请求地址:', apiUrl);
+
+      const eventSource = new EventSource(apiUrl);
+      currentEventSource = eventSource;
+
+      let accumulatedContent = '';
+      let isFinished = false;
+
+      eventSource.onmessage = function(event) {
+        if (isFinished) return;
+
+        if (!event.data || event.data === '[DONE]') {
+          if (event.data === '[DONE]') finishStream();
+          return;
+        }
+
+        try {
+          const parsedData = JSON.parse(event.data);
+          console.log('收到数据:', parsedData); // 调试用
+
+          const content = extractContent(parsedData);
+          if (content !== null && content !== undefined && content !== '') {
+            accumulatedContent += content;
+            updateAiContent(accumulatedContent);
+          }
+
+          if (isResponseEnd(parsedData)) {
+            finishStream();
+          }
+        } catch (err) {
+          console.warn('解析消息出错:', err, event.data);
+          // 如果不是 JSON，尝试作为纯文本追加
+          if (event.data && event.data !== '[DONE]') {
+            accumulatedContent += event.data;
+            updateAiContent(accumulatedContent);
+          }
+        }
+      };
+
+      function updateAiContent(text) {
+        if (!currentAiMessageContentEl) return;
+        currentAiMessageContentEl.innerHTML = '';
+        currentAiMessageContentEl.appendChild(document.createTextNode(text));
+        if (!isFinished) {
+          const cursor = document.createElement('span');
+          cursor.className = 'streaming-cursor';
+          currentAiMessageContentEl.appendChild(cursor);
+        }
+        scrollToBottom();
+      }
+
+      function finishStream() {
+        if (isFinished) return;
+        isFinished = true;
+        if (currentAiMessageContentEl) {
+          const cursor = currentAiMessageContentEl.querySelector('.streaming-cursor');
+          if (cursor) cursor.remove();
+        }
+        if (eventSource) {
+          eventSource.close();
+          if (currentEventSource === eventSource) currentEventSource = null;
+        }
+        isGenerating = false;
+        sendBtn.disabled = false;
+        messageInput.disabled = false;
+        sendBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        messageInput.focus();
+        scrollToBottom();
+      }
+
+      eventSource.onerror = function(err) {
+        console.error('EventSource 错误:', err);
+        if (!isFinished) {
+          finishStream();
+          if (currentAiMessageContentEl && accumulatedContent.trim() === '') {
+            currentAiMessageContentEl.textContent = '⚠️ 连接出错，请检查后端服务是否启动';
+          }
+        }
+        if (eventSource.readyState !== EventSource.CLOSED) {
+          eventSource.close();
+        }
+      };
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+
+    messageInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (!isGenerating) sendMessage();
+      }
+    });
+
+    adjustTextareaHeight();
+    messageInput.focus();
+
+    window.addEventListener('beforeunload', function() {
+      if (currentEventSource) currentEventSource.close();
+    });
+  })();
+</script>
+</body>
+</html>
