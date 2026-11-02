@@ -1,6 +1,9 @@
 package com.yh.ai.arg.knowledge.trigger.http;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yh.ai.arg.knowledge.api.IAiService;
+import com.yh.ai.arg.knowledge.api.response.Response;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.ChatResponse;
@@ -13,10 +16,16 @@ import org.springframework.ai.ollama.OllamaChatClient;
 import org.springframework.ai.ollama.api.OllamaOptions;
 import org.springframework.ai.vectorstore.PgVectorStore;
 import org.springframework.ai.vectorstore.SearchRequest;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -49,6 +58,66 @@ public class OllamaController implements IAiService {
 
     @Resource
     private PgVectorStore pgVectorStore;
+
+    @Value("${spring.ai.ollama.base-url}")
+    private String ollamaBaseUrl;
+
+    /**
+     * 列出 Ollama 上可用的问答（聊天）模型，供前端模型下拉框使用
+     */
+    @RequestMapping(value = "models", method = RequestMethod.GET)
+    public Response<List<String>> models() {
+        try {
+            HttpClient client = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(5))
+                    .build();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(ollamaBaseUrl + "/api/tags"))
+                    .timeout(Duration.ofSeconds(10))
+                    .GET()
+                    .build();
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                return Response.<List<String>>builder().code("9999")
+                        .info("获取模型列表失败: HTTP " + response.statusCode()).build();
+            }
+
+            JsonNode root = new ObjectMapper().readTree(response.body());
+            List<String> chatModels = new ArrayList<>();
+            for (JsonNode node : root.path("models")) {
+                String name = node.path("name").asText();
+                if (name.isBlank()) {
+                    continue;
+                }
+                // 只保留可做问答的模型：有能力信息时看 capabilities，没有时按名称排除纯嵌入模型（nomic-embed-text 等）
+                JsonNode caps = node.path("capabilities");
+                boolean isChat;
+                if (caps.isArray() && caps.size() > 0) {
+                    boolean hasCompletion = false;
+                    boolean hasEmbed = false;
+                    for (JsonNode c : caps) {
+                        String s = c.asText();
+                        if ("completion".equals(s) || "chat".equals(s)) {
+                            hasCompletion = true;
+                        }
+                        if ("embed".equals(s) || "embedding".equals(s)) {
+                            hasEmbed = true;
+                        }
+                    }
+                    isChat = hasCompletion || !hasEmbed;
+                } else {
+                    isChat = !name.toLowerCase().contains("embed");
+                }
+                if (isChat) {
+                    chatModels.add(name);
+                }
+            }
+            return Response.<List<String>>builder().code("0000").info("调用成功").data(chatModels).build();
+        } catch (Exception e) {
+            log.error("获取模型列表失败", e);
+            return Response.<List<String>>builder().code("9999").info("获取模型列表失败: " + e.getMessage()).build();
+        }
+    }
 
     @RequestMapping(value = "generate", method = RequestMethod.GET)
     @Override

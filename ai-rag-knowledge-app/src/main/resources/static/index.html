@@ -43,7 +43,9 @@
   <header class="h-14 border-b border-gray-100 flex items-center px-6 shadow-sm z-10 justify-between">
     <h1 id="currentChatTitle" class="font-semibold text-gray-700">新对话</h1>
     <div class="flex items-center gap-3">
-      <span class="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">deepseek-r1:1.5b</span>
+      <select id="modelSelect" title="选择问答模型（云端 DeepSeek / 本地 Ollama）" class="text-xs text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-1.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-100 cursor-pointer max-w-[200px]">
+        <option value="deepseek-chat">deepseek-chat</option>
+      </select>
       <select id="ragTagSelect" title="选择对话要检索的知识库，不选则普通对话" class="text-xs text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-1.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-100 cursor-pointer">
         <option value="">不使用知识库（普通对话）</option>
       </select>
@@ -162,6 +164,7 @@
 
   const ragTagInput = document.getElementById('ragTagInput');
   const ragTagSelect = document.getElementById('ragTagSelect');
+  const modelSelect = document.getElementById('modelSelect');
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('fileInput');
   const fileListContainer = document.getElementById('fileListContainer');
@@ -196,6 +199,40 @@
     localStorage.setItem('ai_rag_tag', ragTagSelect.value);
   });
 
+  // ================= 模型选择 =================
+  // 云端（DeepSeek）与本地（Ollama）模型分开加载，选中云端模型走 deepseek 接口
+  let cloudModels = new Set();
+
+  function loadModels() {
+    Promise.all([
+      fetch('/api/v1/deepseek/models').then(r => r.json()),
+      fetch('/api/v1/ollama/models').then(r => r.json())
+    ]).then(([cloudRes, localRes]) => {
+      const cloud = (cloudRes.code === '0000' && Array.isArray(cloudRes.data)) ? cloudRes.data : [];
+      const local = (localRes.code === '0000' && Array.isArray(localRes.data)) ? localRes.data : [];
+      cloudModels = new Set(cloud);
+      const saved = localStorage.getItem('ai_model') || '';
+      const current = modelSelect.value;
+      const optCloud = cloud.length
+              ? `<optgroup label="云端 DeepSeek">${cloud.map(m => `<option value="${escapeHTML(m)}">${escapeHTML(m)}</option>`).join('')}</optgroup>`
+              : '';
+      const optLocal = local.length
+              ? `<optgroup label="本地 Ollama">${local.map(m => `<option value="${escapeHTML(m)}">${escapeHTML(m)}</option>`).join('')}</optgroup>`
+              : '';
+      modelSelect.innerHTML = optCloud + optLocal;
+      if (cloud.includes(saved) || local.includes(saved)) modelSelect.value = saved;
+      else if (cloud.includes(current)) modelSelect.value = current;
+      else if (local.includes(current)) modelSelect.value = current;
+      else if (cloud.length) modelSelect.value = cloud[0];
+      else if (local.length) modelSelect.value = local[0];
+    }).catch(e => console.error('加载模型列表失败', e));
+  }
+
+  // 切换模型时记住选择
+  modelSelect.addEventListener('change', () => {
+    localStorage.setItem('ai_model', modelSelect.value);
+  });
+
   // ================= 初始化与左侧逻辑 =================
   function init() {
     const savedChats = localStorage.getItem('ai_chats');
@@ -208,6 +245,7 @@
     renderChatList();
     switchChat(activeChatId);
     loadRagTags();
+    loadModels();
   }
 
   function saveState() {
@@ -380,7 +418,12 @@
     sendBtn.disabled = true;
 
     const ragTag = ragTagSelect.value;
-    const API_URL = `/api/v1/ollama/generate_stream_with_rag?model=deepseek-r1:1.5b&message=${encodeURIComponent(message)}&ragTag=${encodeURIComponent(ragTag)}`;
+    // 云端(DeepSeek)模型走 /api/v1/deepseek/，本地(Ollama)模型走 /api/v1/ollama/；ragTag 为空时后端退化为普通对话
+    const model = modelSelect.value || 'deepseek-chat';
+    const isCloud = cloudModels.has(model);
+    const API_URL = isCloud
+            ? `/api/v1/deepseek/generate_stream_with_rag?model=${encodeURIComponent(model)}&message=${encodeURIComponent(message)}&ragTag=${encodeURIComponent(ragTag)}`
+            : `/api/v1/ollama/generate_stream_with_rag?model=${encodeURIComponent(model)}&message=${encodeURIComponent(message)}&ragTag=${encodeURIComponent(ragTag)}`;
 
     currentEventSource = new EventSource(API_URL);
     let accumulatedContent = '';

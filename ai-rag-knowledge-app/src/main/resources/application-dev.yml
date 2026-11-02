@@ -2,6 +2,9 @@ server:
   port: 8090
 
 spring:
+  # 排除 Spring AI 的 OpenAI 自动配置（我们手动创建外部客户端 Bean，避免它要求 spring.ai.openai.api-key 导致启动失败）
+  autoconfigure:
+    exclude: org.springframework.ai.autoconfigure.openai.OpenAiAutoConfiguration
   datasource:
     driver-class-name: org.postgresql.Driver
     # 使用专用业务账号，避免依赖 postgres 超级用户（曾被改 NOLOGIN 导致启动失败）
@@ -36,6 +39,30 @@ spring:
         options:
           num-batch: 512
         model: nomic-embed-text
+
+# ===== 云端 OpenAI 兼容模型（可选）：填了 api-key 即启用 =====
+# 问答服务商（均为 OpenAI 兼容协议）：
+#   DeepSeek      base-url=https://api.deepseek.com                      模型如 deepseek-chat / deepseek-reasoner（仅问答，无嵌入）
+#   阿里通义      base-url=https://dashscope.aliyuncs.com/compatible-mode/v1   模型如 qwen-plus（同时有 text-embedding-v3 嵌入）
+#   Moonshot      base-url=https://api.moonshot.cn/v1                    模型如 moonshot-v1-8k
+#   智谱GLM       base-url=https://open.bigmodel.cn/api/paas/v4          模型如 glm-4-flash
+#   硅基流动      base-url=https://api.siliconflow.cn/v1                 模型如 deepseek-ai/DeepSeek-V3（同时有 BAAI/bge-m3 嵌入）
+ai:
+  # ---- 问答（聊天）云端配置 ----
+  external:
+    base-url: https://api.deepseek.com
+    api-key: sk-46ea63ebd8bf4e9590d7764bbc5bc968
+    # 这些模型名会路由到云端问答（前端下拉框选到它们就走云端）
+    models: deepseek-chat,deepseek-reasoner
+  # ---- 向量嵌入选择 ----
+  embedding:
+    backend: ollama            # ollama = 本地嵌入（默认）；openai = 云端嵌入（用下面 external.*，可与问答不同服务商）
+    model: nomic-embed-text    # 本地嵌入模型（backend=ollama 时用）
+    external:                  # 云端嵌入配置（backend=openai 时用）
+      base-url: https://api.siliconflow.cn/v1
+      api-key: 填你的嵌入服务商KEY
+      model: BAAI/bge-m3
+# ⚠️ 切换嵌入后端/模型会改变向量维度，必须先 DROP TABLE vector_store 再重新导入知识库
 
 # Redis
 redis:

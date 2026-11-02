@@ -33,6 +33,11 @@
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-ollama</artifactId>
         </dependency>
+        <!-- 云端 OpenAI 兼容模型（DeepSeek/通义/Moonshot/SiliconFlow 等），用于问答与向量嵌入 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-openai</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>com.alibaba</groupId>
