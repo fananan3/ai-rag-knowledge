@@ -10,18 +10,15 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Inter', sans-serif; }
-    /* 自定义滚动条 */
     .custom-scrollbar::-webkit-scrollbar { width: 6px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 10px; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #d1d5db; }
-    /* 光标闪烁动画 */
     .typing-cursor::after {
       content: '▍';
       animation: blink 1s step-end infinite;
     }
     @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-    /* 拖拽高亮 */
     .dropzone-active {
       border-color: #6366f1 !important;
       background-color: #eef2ff !important;
@@ -32,28 +29,24 @@
 
 <!-- ================= 左侧：会话列表 ================= -->
 <aside class="w-64 bg-gray-900 text-gray-300 flex flex-col flex-shrink-0 h-full shadow-xl z-20">
-  <!-- 新建按钮 -->
   <div class="p-4">
     <button id="newChatBtn" class="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-lg transition-colors font-medium text-sm shadow-md">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
       新建聊天
     </button>
   </div>
-
-  <!-- 会话列表 -->
-  <div id="chatListContainer" class="flex-1 overflow-y-auto custom-scrollbar px-3 space-y-1">
-    <!-- 动态渲染 -->
-  </div>
+  <div id="chatListContainer" class="flex-1 overflow-y-auto custom-scrollbar px-3 space-y-1"></div>
 </aside>
 
 <!-- ================= 右侧：主对话区 ================= -->
 <main class="flex-1 flex flex-col relative h-full bg-white">
-  <!-- 头部 -->
   <header class="h-14 border-b border-gray-100 flex items-center px-6 shadow-sm z-10 justify-between">
     <h1 id="currentChatTitle" class="font-semibold text-gray-700">新对话</h1>
     <div class="flex items-center gap-3">
       <span class="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">deepseek-r1:1.5b</span>
-      <!-- 知识库面板开关 -->
+      <select id="ragTagSelect" title="选择对话要检索的知识库，不选则普通对话" class="text-xs text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-1.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-100 cursor-pointer">
+        <option value="">不使用知识库（普通对话）</option>
+      </select>
       <button id="toggleUploadBtn" class="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1 font-medium bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
         导入知识库
@@ -61,29 +54,27 @@
     </div>
   </header>
 
-  <!-- 知识库上传面板 (默认隐藏，点击右上角展开) -->
+  <!-- 知识库上传面板 -->
   <div id="uploadPanel" class="hidden bg-white border-b border-gray-200 shadow-sm z-10">
     <div class="max-w-4xl mx-auto p-6 flex gap-6">
-      <!-- 左侧：标签与说明 -->
       <div class="w-1/3 flex flex-col justify-center">
         <h3 class="font-semibold text-gray-800 mb-2">知识库导入 (RAG)</h3>
-        <p class="text-xs text-gray-500 leading-relaxed mb-4">上传 md、txt、sql 文件，系统会自动解析、拆分为向量并存入 PostgreSQL。之后 AI 将根据你的文档进行回答。</p>
+        <!-- 文案已更新：支持 PDF -->
+        <p class="text-xs text-gray-500 leading-relaxed mb-4">上传 md、txt、sql、pdf 文件，系统会自动解析、拆分为向量并存入 PostgreSQL。之后 AI 将根据你的文档进行回答。</p>
         <input type="text" id="ragTagInput" placeholder="输入知识库标签 (ragTag)" class="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 text-sm outline-none bg-gray-50 focus:bg-white mb-2">
       </div>
-      <!-- 右侧：拖拽区 -->
       <div class="flex-1">
         <div id="dropzone" class="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center cursor-pointer transition-colors duration-200 hover:bg-gray-50 flex flex-col items-center justify-center h-full min-h-[120px]">
-          <input type="file" id="fileInput" multiple accept=".md,.txt,.sql" class="hidden">
+          <!-- accept 已加入 .pdf -->
+          <input type="file" id="fileInput" multiple accept=".md,.txt,.sql,.pdf" class="hidden">
           <svg class="w-8 h-8 text-indigo-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
           <p class="text-sm text-gray-600 font-medium">点击或拖拽文件</p>
-          <p class="text-xs text-gray-400 mt-1">支持 .md, .txt, .sql</p>
+          <!-- 提示文案已加入 pdf -->
+          <p class="text-xs text-gray-400 mt-1">支持 .md, .txt, .sql, .pdf</p>
         </div>
       </div>
-      <!-- 右侧：操作区 -->
       <div class="w-1/4 flex flex-col justify-between">
-        <div id="fileListContainer" class="space-y-1 overflow-y-auto max-h-[120px] custom-scrollbar mb-2">
-          <!-- 动态渲染文件列表 -->
-        </div>
+        <div id="fileListContainer" class="space-y-1 overflow-y-auto max-h-[120px] custom-scrollbar mb-2"></div>
         <button id="submitUploadBtn" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex justify-center items-center gap-2">
           <span id="uploadBtnText">开始解析</span>
           <svg id="uploadLoadingIcon" class="hidden animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -93,10 +84,8 @@
     <div id="uploadMessage" class="hidden max-w-4xl mx-auto px-6 pb-4 text-xs font-medium"></div>
   </div>
 
-  <!-- 对话内容区 -->
   <div id="chatContainer" class="flex-1 overflow-y-auto p-6 scroll-smooth custom-scrollbar">
     <div id="messages" class="max-w-4xl mx-auto space-y-6">
-      <!-- 欢迎提示 -->
       <div id="welcomeTip" class="text-center text-gray-400 mt-20">
         <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
         <p>有什么我可以帮你的吗？</p>
@@ -104,7 +93,6 @@
     </div>
   </div>
 
-  <!-- 底部输入区 -->
   <div class="p-4 bg-white border-t border-gray-100">
     <div class="max-w-4xl mx-auto relative flex items-end bg-gray-50 border border-gray-200 rounded-xl p-2 focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 transition-all shadow-sm">
       <textarea id="messageInput" rows="1" placeholder="给 AI 发送消息..." class="flex-1 bg-transparent border-0 outline-none resize-none px-2 py-1.5 max-h-32 text-sm text-gray-700 custom-scrollbar" style="min-height: 36px;"></textarea>
@@ -124,24 +112,23 @@
   let isGenerating = false;
   let filesToUpload = [];
 
-  const ALLOWED_EXTENSIONS = ['.md', '.txt', '.sql'];
+  // 允许的扩展名：加入 .pdf
+  const ALLOWED_EXTENSIONS = ['.md', '.txt', '.sql', '.pdf'];
 
-  // DOM 元素 - 左侧列表
   const chatListContainer = document.getElementById('chatListContainer');
   const newChatBtn = document.getElementById('newChatBtn');
   const currentChatTitle = document.getElementById('currentChatTitle');
 
-  // DOM 元素 - 右侧对话
   const messagesDiv = document.getElementById('messages');
   const welcomeTip = document.getElementById('welcomeTip');
   const chatContainer = document.getElementById('chatContainer');
   const messageInput = document.getElementById('messageInput');
   const sendBtn = document.getElementById('sendBtn');
 
-  // DOM 元素 - 上传面板
   const toggleUploadBtn = document.getElementById('toggleUploadBtn');
   const uploadPanel = document.getElementById('uploadPanel');
   const ragTagInput = document.getElementById('ragTagInput');
+  const ragTagSelect = document.getElementById('ragTagSelect');
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('fileInput');
   const fileListContainer = document.getElementById('fileListContainer');
@@ -149,6 +136,27 @@
   const uploadBtnText = document.getElementById('uploadBtnText');
   const uploadLoadingIcon = document.getElementById('uploadLoadingIcon');
   const uploadMessage = document.getElementById('uploadMessage');
+
+  // ================= 知识库选择 =================
+  // 从后端加载已上传的知识库标签列表，填充头部下拉框
+  function loadRagTags() {
+    fetch('/api/v1/rag/query_rag_tag_list')
+      .then(res => res.json())
+      .then(res => {
+        if (res.code !== '0000' || !Array.isArray(res.data)) return;
+        const saved = localStorage.getItem('ai_rag_tag') || '';
+        ragTagSelect.innerHTML = '<option value="">不使用知识库（普通对话）</option>' +
+          res.data.map(t => `<option value="${escapeHTML(t)}">${escapeHTML(t)}</option>`).join('');
+        if (res.data.includes(saved)) ragTagSelect.value = saved;
+        else if (res.data.length === 1) ragTagSelect.value = res.data[0];
+      })
+      .catch(e => console.error('加载知识库列表失败', e));
+  }
+
+  // 切换知识库时记住选择，下次打开页面自动恢复
+  ragTagSelect.addEventListener('change', () => {
+    localStorage.setItem('ai_rag_tag', ragTagSelect.value);
+  });
 
   // ================= 初始化与左侧逻辑 =================
   function init() {
@@ -161,6 +169,7 @@
     }
     renderChatList();
     switchChat(activeChatId);
+    loadRagTags();
   }
 
   function saveState() {
@@ -332,8 +341,9 @@
     isGenerating = true;
     sendBtn.disabled = true;
 
-    // 替换为你的真实接口地址
-    const API_URL = `/api/v1/ollama/generate_stream?model=deepseek-r1:1.5b&message=${encodeURIComponent(message)}`;
+    // 用头部下拉框选中的知识库标签检索，ragTag 为空时后端自动退化为普通对话
+    const ragTag = ragTagSelect.value;
+    const API_URL = `/api/v1/ollama/generate_stream_with_rag?model=deepseek-r1:1.5b&message=${encodeURIComponent(message)}&ragTag=${encodeURIComponent(ragTag)}`;
 
     currentEventSource = new EventSource(API_URL);
     let accumulatedContent = '';
@@ -445,14 +455,16 @@
     filesToUpload.forEach(file => formData.append('file', file));
 
     try {
-      // 注意替换为你的真实接口
-      const response = await fetch('/api/v1/ollama/file/upload', { method: 'POST', body: formData });
+      const response = await fetch('/api/v1/rag/file/upload', { method: 'POST', body: formData });
       const res = await response.json();
 
       if (res.code === '0000') {
         showUploadMsg('🎉 上传解析成功，AI 正在学习中！', 'success');
         filesToUpload = [];
         renderFileList();
+        // 刷新知识库下拉列表并自动选中刚上传的标签，接下来对话即可检索该知识库
+        localStorage.setItem('ai_rag_tag', ragTag);
+        loadRagTags();
       } else {
         showUploadMsg(`❌ 上传失败: ${res.info || '未知错误'}`, 'error');
       }
@@ -480,7 +492,6 @@
     uploadMessage.className = `max-w-4xl mx-auto px-6 pb-4 text-xs font-medium ${type === 'success' ? 'text-green-600' : 'text-red-500'}`;
   }
 
-  // 启动应用
   init();
 </script>
 </body>

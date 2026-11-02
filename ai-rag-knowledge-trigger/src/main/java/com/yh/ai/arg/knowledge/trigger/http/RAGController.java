@@ -50,7 +50,7 @@ public class RAGController implements IRAGService {
 
     @RequestMapping(value = "file/upload", method = RequestMethod.POST, headers = "content-type=multipart/form-data")
     @Override
-    public Response<String> uploadFile(@RequestParam String ragTag, @RequestParam("file") List<MultipartFile> files) {
+    public Response<String> uploadFile(@RequestParam("ragTag") String ragTag, @RequestParam("file") List<MultipartFile> files) {
         log.info("上传知识库开始 {}", ragTag);
 
         for (MultipartFile file : files) {
