@@ -48,7 +48,6 @@ public class RAGController implements IRAGService {
                 .build();
     }
 
-
     @RequestMapping(value = "file/upload", method = RequestMethod.POST, headers = "content-type=multipart/form-data")
     @Override
     public Response<String> uploadFile(@RequestParam String ragTag, @RequestParam("file") List<MultipartFile> files) {
