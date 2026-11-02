@@ -3,371 +3,485 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI 知识库对话助手</title>
+  <title>AI 知识库对话系统</title>
+  <!-- 引入 TailwindCSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz@14..32&display=swap" rel="stylesheet">
-
+  <!-- 引入 Inter 字体 -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
-    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #f7f9fc; }
-    .chat-scroll::-webkit-scrollbar { width: 6px; }
-    .chat-scroll::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
-    .chat-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-    .chat-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-    .streaming-cursor::after {
-      content: '▍'; display: inline-block; margin-left: 2px;
+    body { font-family: 'Inter', sans-serif; }
+    /* 自定义滚动条 */
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #d1d5db; }
+    /* 光标闪烁动画 */
+    .typing-cursor::after {
+      content: '▍';
       animation: blink 1s step-end infinite;
     }
     @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+    /* 拖拽高亮 */
+    .dropzone-active {
+      border-color: #6366f1 !important;
+      background-color: #eef2ff !important;
+    }
   </style>
 </head>
-<body class="h-screen flex items-center justify-center p-4">
+<body class="bg-gray-50 h-screen flex overflow-hidden text-gray-800">
 
-<div class="w-full max-w-6xl h-[90vh] flex gap-4">
+<!-- ================= 左侧：会话列表 ================= -->
+<aside class="w-64 bg-gray-900 text-gray-300 flex flex-col flex-shrink-0 h-full shadow-xl z-20">
+  <!-- 新建按钮 -->
+  <div class="p-4">
+    <button id="newChatBtn" class="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-lg transition-colors font-medium text-sm shadow-md">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+      新建聊天
+    </button>
+  </div>
 
-  <!-- ================= 左侧：知识库管理 (纯原生 JS 实现) ================= -->
-  <div class="w-80 bg-white rounded-2xl shadow-xl flex flex-col overflow-hidden border border-gray-100">
-    <header class="px-5 py-4 border-b border-gray-100 bg-white/80">
-      <h2 class="text-base font-semibold text-gray-800 flex items-center gap-2">
-        <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-        知识库管理
-      </h2>
-    </header>
+  <!-- 会话列表 -->
+  <div id="chatListContainer" class="flex-1 overflow-y-auto custom-scrollbar px-3 space-y-1">
+    <!-- 动态渲染 -->
+  </div>
+</aside>
 
-    <div class="p-5 flex-1 overflow-y-auto chat-scroll">
-      <!-- 标签输入 -->
-      <div class="mb-5">
-        <label class="block text-sm font-medium text-gray-700 mb-2">知识库标签</label>
-        <input id="tagInput" list="tag-list" type="text" placeholder="选择或输入新标签"
-               class="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all bg-gray-50/50">
-        <datalist id="tag-list">
-          <!-- 已有的标签会通过 JS 动态插入到这里 -->
-        </datalist>
-      </div>
-
-      <!-- 拖拽/点击上传区 -->
-      <div id="dropZone" class="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-indigo-400 transition-colors cursor-pointer relative bg-gray-50/50">
-        <input type="file" id="fileInput" multiple class="hidden">
-        <svg class="mx-auto h-10 w-10 text-gray-400 mb-2" stroke="currentColor" fill="none" viewBox="0 0 48 48"><path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
-        <p class="text-sm text-gray-600">点击或拖拽文件到此处</p>
-        <p class="text-xs text-gray-400 mt-1">支持 PDF, Word, TXT</p>
-      </div>
-
-      <!-- 文件列表 -->
-      <div id="fileList" class="mt-4 space-y-2 hidden"></div>
-    </div>
-
-    <!-- 上传按钮 -->
-    <div class="p-4 border-t border-gray-100 bg-gray-50/50">
-      <button id="uploadBtn" class="w-full flex justify-center py-2.5 px-4 rounded-xl shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 transition-all">
-        <span id="btnText">上传并解析</span>
+<!-- ================= 右侧：主对话区 ================= -->
+<main class="flex-1 flex flex-col relative h-full bg-white">
+  <!-- 头部 -->
+  <header class="h-14 border-b border-gray-100 flex items-center px-6 shadow-sm z-10 justify-between">
+    <h1 id="currentChatTitle" class="font-semibold text-gray-700">新对话</h1>
+    <div class="flex items-center gap-3">
+      <span class="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">deepseek-r1:1.5b</span>
+      <!-- 知识库面板开关 -->
+      <button id="toggleUploadBtn" class="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1 font-medium bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+        导入知识库
       </button>
     </div>
-  </div>
+  </header>
 
-  <!-- ================= 右侧：对话主界面 ================= -->
-  <div class="flex-1 bg-white rounded-2xl shadow-xl flex flex-col overflow-hidden border border-gray-100">
-    <header class="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-white/80 backdrop-blur-sm">
-      <div class="flex items-center gap-3">
-        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-sm">
-          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-        </div>
-        <h1 class="text-lg font-semibold text-gray-800">Ollama 对话</h1>
+  <!-- 知识库上传面板 (默认隐藏，点击右上角展开) -->
+  <div id="uploadPanel" class="hidden bg-white border-b border-gray-200 shadow-sm z-10">
+    <div class="max-w-4xl mx-auto p-6 flex gap-6">
+      <!-- 左侧：标签与说明 -->
+      <div class="w-1/3 flex flex-col justify-center">
+        <h3 class="font-semibold text-gray-800 mb-2">知识库导入 (RAG)</h3>
+        <p class="text-xs text-gray-500 leading-relaxed mb-4">上传 md、txt、sql 文件，系统会自动解析、拆分为向量并存入 PostgreSQL。之后 AI 将根据你的文档进行回答。</p>
+        <input type="text" id="ragTagInput" placeholder="输入知识库标签 (ragTag)" class="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 text-sm outline-none bg-gray-50 focus:bg-white mb-2">
       </div>
-      <div class="flex items-center gap-2">
-        <span class="text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 font-mono border border-gray-200">deepseek-r1:1.5b</span>
-        <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
-      </div>
-    </header>
-
-    <main id="chatContainer" class="flex-1 overflow-y-auto p-5 space-y-4 chat-scroll bg-gray-50/30">
-      <div id="messages" class="space-y-4">
-        <div class="flex items-start gap-3">
-          <div class="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-sm font-medium">AI</div>
-          <div class="bg-white rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm border border-gray-100 max-w-[85%]">
-            <p class="text-gray-700 text-sm leading-relaxed">你好！我是 Ollama 助手。你可以先在左侧上传知识库，然后向我提问。</p>
-          </div>
+      <!-- 右侧：拖拽区 -->
+      <div class="flex-1">
+        <div id="dropzone" class="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center cursor-pointer transition-colors duration-200 hover:bg-gray-50 flex flex-col items-center justify-center h-full min-h-[120px]">
+          <input type="file" id="fileInput" multiple accept=".md,.txt,.sql" class="hidden">
+          <svg class="w-8 h-8 text-indigo-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+          <p class="text-sm text-gray-600 font-medium">点击或拖拽文件</p>
+          <p class="text-xs text-gray-400 mt-1">支持 .md, .txt, .sql</p>
         </div>
       </div>
-    </main>
-
-    <footer class="p-4 border-t border-gray-100 bg-white">
-      <div class="flex items-end gap-2">
-        <textarea id="messageInput" rows="1" placeholder="输入消息..." class="flex-1 resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-gray-50/50" style="min-height: 48px; max-height: 120px;"></textarea>
-        <button id="sendBtn" class="flex-shrink-0 h-12 w-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-md flex items-center justify-center disabled:opacity-50 transition-all">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+      <!-- 右侧：操作区 -->
+      <div class="w-1/4 flex flex-col justify-between">
+        <div id="fileListContainer" class="space-y-1 overflow-y-auto max-h-[120px] custom-scrollbar mb-2">
+          <!-- 动态渲染文件列表 -->
+        </div>
+        <button id="submitUploadBtn" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex justify-center items-center gap-2">
+          <span id="uploadBtnText">开始解析</span>
+          <svg id="uploadLoadingIcon" class="hidden animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
         </button>
       </div>
-    </footer>
+    </div>
+    <div id="uploadMessage" class="hidden max-w-4xl mx-auto px-6 pb-4 text-xs font-medium"></div>
   </div>
-</div>
 
-<!-- ================= 1. 原生 JS：处理知识库上传 ================= -->
+  <!-- 对话内容区 -->
+  <div id="chatContainer" class="flex-1 overflow-y-auto p-6 scroll-smooth custom-scrollbar">
+    <div id="messages" class="max-w-4xl mx-auto space-y-6">
+      <!-- 欢迎提示 -->
+      <div id="welcomeTip" class="text-center text-gray-400 mt-20">
+        <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
+        <p>有什么我可以帮你的吗？</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 底部输入区 -->
+  <div class="p-4 bg-white border-t border-gray-100">
+    <div class="max-w-4xl mx-auto relative flex items-end bg-gray-50 border border-gray-200 rounded-xl p-2 focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 transition-all shadow-sm">
+      <textarea id="messageInput" rows="1" placeholder="给 AI 发送消息..." class="flex-1 bg-transparent border-0 outline-none resize-none px-2 py-1.5 max-h-32 text-sm text-gray-700 custom-scrollbar" style="min-height: 36px;"></textarea>
+      <button id="sendBtn" class="flex-shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg p-2 ml-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mb-0.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+      </button>
+    </div>
+    <p class="text-center text-[11px] text-gray-400 mt-2">Enter 发送，Shift + Enter 换行</p>
+  </div>
+</main>
+
 <script>
-  document.addEventListener('DOMContentLoaded', () => {
-    const tagInput = document.getElementById('tagInput');
-    const tagList = document.getElementById('tag-list');
-    const dropZone = document.getElementById('dropZone');
-    const fileInput = document.getElementById('fileInput');
-    const fileListDiv = document.getElementById('fileList');
-    const uploadBtn = document.getElementById('uploadBtn');
-    const btnText = document.getElementById('btnText');
+  // ================= 全局状态 =================
+  let chats = [];
+  let activeChatId = null;
+  let currentEventSource = null;
+  let isGenerating = false;
+  let filesToUpload = [];
 
-    let filesToUpload = [];
+  const ALLOWED_EXTENSIONS = ['.md', '.txt', '.sql'];
 
-    // 1. 加载已有标签
-    fetch('/api/v1/rag/query_rag_tag_list')
-            .then(res => res.json())
-            .then(res => {
-              if (res.code === '0000' && res.data) {
-                res.data.forEach(tag => {
-                  const option = document.createElement('option');
-                  option.value = tag;
-                  tagList.appendChild(option);
-                });
-              }
-            }).catch(err => console.error('加载标签失败', err));
+  // DOM 元素 - 左侧列表
+  const chatListContainer = document.getElementById('chatListContainer');
+  const newChatBtn = document.getElementById('newChatBtn');
+  const currentChatTitle = document.getElementById('currentChatTitle');
 
-    // 2. 拖拽与点击事件
-    dropZone.addEventListener('click', () => fileInput.click());
+  // DOM 元素 - 右侧对话
+  const messagesDiv = document.getElementById('messages');
+  const welcomeTip = document.getElementById('welcomeTip');
+  const chatContainer = document.getElementById('chatContainer');
+  const messageInput = document.getElementById('messageInput');
+  const sendBtn = document.getElementById('sendBtn');
 
-    dropZone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      dropZone.classList.add('border-indigo-400', 'bg-indigo-50/50');
+  // DOM 元素 - 上传面板
+  const toggleUploadBtn = document.getElementById('toggleUploadBtn');
+  const uploadPanel = document.getElementById('uploadPanel');
+  const ragTagInput = document.getElementById('ragTagInput');
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const fileListContainer = document.getElementById('fileListContainer');
+  const submitUploadBtn = document.getElementById('submitUploadBtn');
+  const uploadBtnText = document.getElementById('uploadBtnText');
+  const uploadLoadingIcon = document.getElementById('uploadLoadingIcon');
+  const uploadMessage = document.getElementById('uploadMessage');
+
+  // ================= 初始化与左侧逻辑 =================
+  function init() {
+    const savedChats = localStorage.getItem('ai_chats');
+    if (savedChats) {
+      chats = JSON.parse(savedChats);
+      if (chats.length > 0) activeChatId = chats[0].id;
+    } else {
+      createNewChat();
+    }
+    renderChatList();
+    switchChat(activeChatId);
+  }
+
+  function saveState() {
+    localStorage.setItem('ai_chats', JSON.stringify(chats));
+  }
+
+  newChatBtn.addEventListener('click', createNewChat);
+
+  function createNewChat() {
+    const newChat = { id: 'chat_' + Date.now(), title: '新对话', messages: [] };
+    chats.unshift(newChat);
+    activeChatId = newChat.id;
+    saveState();
+    renderChatList();
+    switchChat(activeChatId);
+    messageInput.focus();
+  }
+
+  function renderChatList() {
+    chatListContainer.innerHTML = '';
+    chats.forEach(chat => {
+      const isActive = chat.id === activeChatId;
+      const item = document.createElement('div');
+      item.className = `group relative flex items-center justify-between p-2.5 rounded-lg cursor-pointer transition-colors ${isActive ? 'bg-gray-800 text-white' : 'hover:bg-gray-800/50 text-gray-400'}`;
+
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'text-sm truncate pr-12';
+      titleSpan.textContent = chat.title;
+      titleSpan.onclick = () => switchChat(chat.id);
+
+      const actionDiv = document.createElement('div');
+      actionDiv.className = `absolute right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${isActive ? 'bg-gray-800' : 'bg-gray-800/90 rounded'}`;
+
+      const renameBtn = document.createElement('button');
+      renameBtn.className = 'p-1 hover:text-indigo-400 text-gray-400';
+      renameBtn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>';
+      renameBtn.onclick = (e) => { e.stopPropagation(); renameChat(chat.id); };
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'p-1 hover:text-red-400 text-gray-400';
+      deleteBtn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>';
+      deleteBtn.onclick = (e) => { e.stopPropagation(); deleteChat(chat.id); };
+
+      actionDiv.appendChild(renameBtn);
+      actionDiv.appendChild(deleteBtn);
+      item.appendChild(titleSpan);
+      item.appendChild(actionDiv);
+      chatListContainer.appendChild(item);
     });
+  }
 
-    dropZone.addEventListener('dragleave', () => {
-      dropZone.classList.remove('border-indigo-400', 'bg-indigo-50/50');
-    });
-
-    dropZone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      dropZone.classList.remove('border-indigo-400', 'bg-indigo-50/50');
-      handleFiles(e.dataTransfer.files);
-    });
-
-    fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
-
-    // 3. 处理文件列表渲染
-    function handleFiles(files) {
-      filesToUpload = [...filesToUpload, ...Array.from(files)];
-      renderFileList();
+  function renameChat(id) {
+    const chat = chats.find(c => c.id === id);
+    if (!chat) return;
+    const newTitle = prompt('请输入新的对话名称', chat.title);
+    if (newTitle && newTitle.trim() !== '') {
+      chat.title = newTitle.trim();
+      saveState();
+      renderChatList();
+      if (activeChatId === id) currentChatTitle.textContent = chat.title;
     }
+  }
 
-    function removeFile(index) {
-      filesToUpload.splice(index, 1);
-      renderFileList();
-    }
+  function deleteChat(id) {
+    if (!confirm('确定要删除这个对话吗？')) return;
+    chats = chats.filter(c => c.id !== id);
+    if (activeChatId === id) activeChatId = chats.length > 0 ? chats[0].id : null;
+    saveState();
+    renderChatList();
+    if (activeChatId) switchChat(activeChatId);
+    else createNewChat();
+  }
 
-    function renderFileList() {
-      fileListDiv.innerHTML = '';
-      if (filesToUpload.length === 0) {
-        fileListDiv.classList.add('hidden');
-        return;
-      }
-      fileListDiv.classList.remove('hidden');
+  function switchChat(id) {
+    activeChatId = id;
+    const chat = chats.find(c => c.id === id);
+    if (!chat) return;
 
-      filesToUpload.forEach((file, index) => {
-        const item = document.createElement('div');
-        item.className = 'flex items-center justify-between bg-white border border-gray-100 rounded-lg p-2 text-sm';
-        item.innerHTML = `
-          <span class="truncate max-w-[180px] text-gray-700" title="${file.name}">${file.name}</span>
-          <button type="button" class="text-red-400 hover:text-red-600" onclick="removeFile(${index})">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-          </button>
-        `;
-        fileListDiv.appendChild(item);
-      });
-    }
-    // 暴露到全局供 onclick 调用
-    window.removeFile = removeFile;
-
-    // 4. 点击上传
-    uploadBtn.addEventListener('click', async () => {
-      const currentTag = tagInput.value.trim();
-      if (!currentTag) {
-        alert('请先输入知识库标签！');
-        return;
-      }
-      if (filesToUpload.length === 0) {
-        alert('请先选择要上传的文件！');
-        return;
-      }
-
-      // 改变按钮状态
-      btnText.textContent = '解析入库中...';
-      uploadBtn.disabled = true;
-      uploadBtn.classList.add('opacity-70', 'cursor-not-allowed');
-
-      const formData = new FormData();
-      formData.append('ragTag', currentTag);
-      filesToUpload.forEach(file => formData.append('file', file));
-
-      try {
-        const res = await fetch('/api/v1/rag/file/upload', {
-          method: 'POST',
-          body: formData
-        }).then(r => r.json());
-
-        if (res.code === '0000') {
-          alert('✅ 上传并解析成功！');
-          filesToUpload = [];
-          renderFileList();
-          // 刷新下拉列表
-          if (!Array.from(tagList.options).some(opt => opt.value === currentTag)) {
-            const option = document.createElement('option');
-            option.value = currentTag;
-            tagList.appendChild(option);
-          }
-        } else {
-          alert('❌ 上传失败: ' + (res.info || '未知错误'));
-        }
-      } catch (err) {
-        console.error(err);
-        alert('❌ 网络请求失败，请查看后端控制台。');
-      } finally {
-        btnText.textContent = '上传并解析';
-        uploadBtn.disabled = false;
-        uploadBtn.classList.remove('opacity-70', 'cursor-not-allowed');
-      }
-    });
-  });
-</script>
-
-<!-- ================= 2. 原生 JS：处理流式对话 ================= -->
-<script>
-  (function() {
-    const OLLAMA_API = 'http://117.72.123.254:11434/api/chat';
-    const MODEL = 'deepseek-r1:1.5b';
-
-    const chatContainer = document.getElementById('chatContainer');
-    const messagesDiv = document.getElementById('messages');
-    const messageInput = document.getElementById('messageInput');
-    const sendBtn = document.getElementById('sendBtn');
-
-    let isGenerating = false;
-    let currentAiContentDiv = null;
-
-    function scrollToBottom() { chatContainer.scrollTop = chatContainer.scrollHeight; }
-
-    function adjustTextareaHeight() {
-      messageInput.style.height = 'auto';
-      messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
-    }
-    messageInput.addEventListener('input', adjustTextareaHeight);
-
-    function escapeHtml(text) {
-      return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    }
-
-    function addUserMessage(text) {
-      const wrapper = document.createElement('div');
-      wrapper.className = 'flex items-start gap-3 justify-end';
-      wrapper.innerHTML = `
-        <div class="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl rounded-tr-sm px-4 py-3 shadow-sm max-w-[85%]">
-            <p class="text-white text-sm leading-relaxed whitespace-pre-wrap">${escapeHtml(text)}</p>
-        </div>
-        <div class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-sm font-medium">你</div>
-      `;
-      messagesDiv.appendChild(wrapper);
-      scrollToBottom();
-    }
-
-    function addAiPlaceholder() {
-      const wrapper = document.createElement('div');
-      wrapper.className = 'flex items-start gap-3';
-      wrapper.innerHTML = `
-        <div class="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-sm font-medium">AI</div>
-        <div class="bg-white rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm border border-gray-100 max-w-[85%] w-full">
-            <div class="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap min-h-[1.5rem] streaming-cursor"></div>
-        </div>
-      `;
-      messagesDiv.appendChild(wrapper);
-      scrollToBottom();
-      return wrapper.querySelector('.text-gray-700');
-    }
-
-    async function sendMessage() {
-      const text = messageInput.value.trim();
-      if (!text || isGenerating) return;
-
-      messageInput.value = '';
-      adjustTextareaHeight();
-      addUserMessage(text);
-
-      currentAiContentDiv = addAiPlaceholder();
-      isGenerating = true;
-      sendBtn.disabled = true;
-      messageInput.disabled = true;
-
-      let accumulatedContent = '';
-
-      try {
-        const response = await fetch(OLLAMA_API, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: MODEL,
-            messages: [{ role: 'user', content: text }],
-            stream: true
-          })
-        });
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder('utf-8');
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n').filter(line => line.trim() !== '');
-
-          for (const line of lines) {
-            try {
-              const parsed = JSON.parse(line);
-              if (parsed.message && parsed.message.content) {
-                accumulatedContent += parsed.message.content;
-                currentAiContentDiv.textContent = accumulatedContent;
-                scrollToBottom();
-              }
-              if (parsed.done) {
-                finishStream();
-                return;
-              }
-            } catch (e) {
-              console.warn('解析 JSON 失败:', line);
-            }
-          }
-        }
-      } catch (error) {
-        console.error('请求失败:', error);
-        currentAiContentDiv.textContent = '⚠️ 连接 Ollama 失败，请检查服务是否可用。';
-        finishStream();
-      }
-    }
-
-    function finishStream() {
+    if (currentEventSource) {
+      currentEventSource.close();
+      currentEventSource = null;
       isGenerating = false;
       sendBtn.disabled = false;
-      messageInput.disabled = false;
-      if (currentAiContentEl) { // 修复这里可能存在的变量名未定义问题
-        currentAiContentDiv.classList.remove('streaming-cursor');
-      }
-      messageInput.focus();
-      scrollToBottom();
     }
 
-    sendBtn.addEventListener('click', sendMessage);
-    messageInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        if (!isGenerating) sendMessage();
-      }
-    });
+    renderChatList();
+    currentChatTitle.textContent = chat.title;
+    renderMessages(chat.messages);
+  }
 
-    adjustTextareaHeight();
-    messageInput.focus();
-  })();
+  // ================= 对话区渲染 =================
+  function renderMessages(messages) {
+    messagesDiv.innerHTML = '';
+    if (messages.length === 0) {
+      messagesDiv.appendChild(welcomeTip);
+      welcomeTip.style.display = 'block';
+      return;
+    }
+    welcomeTip.style.display = 'none';
+    messages.forEach(msg => appendMessageBubble(msg.role, msg.content));
+    scrollToBottom();
+  }
+
+  function appendMessageBubble(role, content) {
+    const isUser = role === 'user';
+    const wrapper = document.createElement('div');
+    wrapper.className = `flex gap-4 ${isUser ? 'justify-end' : 'justify-start'}`;
+
+    const avatarHtml = isUser
+            ? `<div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold flex-shrink-0">U</div>`
+            : `<div class="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 flex-shrink-0"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg></div>`;
+
+    const contentHtml = `<div class="px-5 py-3.5 rounded-2xl max-w-[85%] text-[15px] leading-relaxed shadow-sm ${
+            isUser ? 'bg-indigo-600 text-white rounded-tr-sm' : 'bg-gray-100 text-gray-800 rounded-tl-sm'
+    }"><div class="whitespace-pre-wrap message-content">${escapeHTML(content)}</div></div>`;
+
+    wrapper.innerHTML = isUser ? (contentHtml + avatarHtml) : (avatarHtml + contentHtml);
+    messagesDiv.appendChild(wrapper);
+    return wrapper.querySelector('.message-content');
+  }
+
+  function escapeHTML(str) {
+    return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag));
+  }
+
+  function scrollToBottom() { chatContainer.scrollTop = chatContainer.scrollHeight; }
+
+  // ================= 对话发送逻辑 =================
+  messageInput.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = (this.scrollHeight) + 'px';
+  });
+
+  messageInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+  sendBtn.addEventListener('click', sendMessage);
+
+  function sendMessage() {
+    const text = messageInput.value.trim();
+    if (!text || isGenerating || !activeChatId) return;
+
+    const chat = chats.find(c => c.id === activeChatId);
+    if (!chat) return;
+
+    messageInput.value = '';
+    messageInput.style.height = 'auto';
+    welcomeTip.style.display = 'none';
+
+    appendMessageBubble('user', text);
+    scrollToBottom();
+
+    chat.messages.push({ role: 'user', content: text });
+    if (chat.messages.length === 1) {
+      chat.title = text.length > 15 ? text.substring(0, 15) + '...' : text;
+      currentChatTitle.textContent = chat.title;
+    }
+    saveState();
+    renderChatList();
+
+    const aiContentDiv = appendMessageBubble('assistant', '');
+    aiContentDiv.parentElement.classList.add('typing-cursor');
+    scrollToBottom();
+
+    startStream(text, chat, aiContentDiv);
+  }
+
+  function startStream(message, chat, aiContentDiv) {
+    isGenerating = true;
+    sendBtn.disabled = true;
+
+    // 替换为你的真实接口地址
+    const API_URL = `/api/v1/ollama/generate_stream?model=deepseek-r1:1.5b&message=${encodeURIComponent(message)}`;
+
+    currentEventSource = new EventSource(API_URL);
+    let accumulatedContent = '';
+    let isFinished = false;
+
+    currentEventSource.onmessage = function(event) {
+      if (event.data === '[DONE]' || isFinished) return;
+      if (!event.data) return;
+
+      try {
+        const data = JSON.parse(event.data);
+        const result = Array.isArray(data) ? data[0] : data;
+        if (!result) return;
+
+        let content = '';
+        if (result.result?.output?.content) content = result.result.output.content;
+        else if (result.output?.content) content = result.output.content;
+
+        if (content) {
+          accumulatedContent += content;
+          aiContentDiv.textContent = accumulatedContent;
+          scrollToBottom();
+        }
+
+        const finishReason = result.result?.metadata?.finishReason || result.metadata?.finishReason;
+        if (finishReason === 'STOP') finishStream();
+      } catch (e) { console.error('解析异常:', e); }
+    };
+
+    currentEventSource.onerror = function(err) {
+      if (!isFinished) {
+        finishStream();
+        if (accumulatedContent === '') aiContentDiv.textContent = '⚠️ 服务连接异常，请稍后重试。';
+      }
+    };
+
+    function finishStream() {
+      if (isFinished) return;
+      isFinished = true;
+      if (currentEventSource) { currentEventSource.close(); currentEventSource = null; }
+      aiContentDiv.parentElement.classList.remove('typing-cursor');
+      if (accumulatedContent) { chat.messages.push({ role: 'assistant', content: accumulatedContent }); saveState(); }
+      isGenerating = false;
+      sendBtn.disabled = false;
+      messageInput.focus();
+    }
+  }
+
+  // ================= 上传面板逻辑 =================
+  toggleUploadBtn.addEventListener('click', () => {
+    uploadPanel.classList.toggle('hidden');
+  });
+
+  dropzone.addEventListener('click', () => fileInput.click());
+  dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dropzone-active'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dropzone-active'));
+  dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.classList.remove('dropzone-active');
+    handleFiles(e.dataTransfer.files);
+  });
+  fileInput.addEventListener('change', (e) => { handleFiles(e.target.files); fileInput.value = ''; });
+
+  function handleFiles(files) {
+    for (let file of files) {
+      const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+      if (!ALLOWED_EXTENSIONS.includes(ext)) {
+        showUploadMsg(`文件 ${file.name} 格式不支持，已跳过`, 'error');
+        continue;
+      }
+      if (!filesToUpload.some(f => f.name === file.name && f.size === file.size)) {
+        filesToUpload.push(file);
+      }
+    }
+    renderFileList();
+  }
+
+  function renderFileList() {
+    fileListContainer.innerHTML = '';
+    if (filesToUpload.length === 0) return;
+
+    filesToUpload.forEach((file, index) => {
+      const div = document.createElement('div');
+      div.className = 'flex items-center justify-between bg-gray-50 border border-gray-200 rounded p-2 text-xs';
+      div.innerHTML = `
+                    <span class="truncate text-gray-700 max-w-[150px]" title="${file.name}">${file.name}</span>
+                    <button type="button" class="text-gray-400 hover:text-red-500" onclick="removeFile(${index})">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                `;
+      fileListContainer.appendChild(div);
+    });
+  }
+
+  window.removeFile = function(index) {
+    filesToUpload.splice(index, 1);
+    renderFileList();
+  };
+
+  submitUploadBtn.addEventListener('click', async () => {
+    const ragTag = ragTagInput.value.trim();
+    if (!ragTag) { showUploadMsg('请输入知识库标签', 'error'); return; }
+    if (filesToUpload.length === 0) { showUploadMsg('请选择文件', 'error'); return; }
+
+    setUploadLoading(true);
+
+    const formData = new FormData();
+    formData.append('ragTag', ragTag);
+    filesToUpload.forEach(file => formData.append('file', file));
+
+    try {
+      // 注意替换为你的真实接口
+      const response = await fetch('/api/v1/ollama/file/upload', { method: 'POST', body: formData });
+      const res = await response.json();
+
+      if (res.code === '0000') {
+        showUploadMsg('🎉 上传解析成功，AI 正在学习中！', 'success');
+        filesToUpload = [];
+        renderFileList();
+      } else {
+        showUploadMsg(`❌ 上传失败: ${res.info || '未知错误'}`, 'error');
+      }
+    } catch (error) {
+      showUploadMsg('❌ 网络请求失败，请检查后端服务', 'error');
+    } finally {
+      setUploadLoading(false);
+    }
+  });
+
+  function setUploadLoading(isLoading) {
+    if (isLoading) {
+      uploadBtnText.textContent = '解析中...';
+      submitUploadBtn.disabled = true;
+      uploadLoadingIcon.classList.remove('hidden');
+    } else {
+      uploadBtnText.textContent = '开始解析';
+      submitUploadBtn.disabled = false;
+      uploadLoadingIcon.classList.add('hidden');
+    }
+  }
+
+  function showUploadMsg(msg, type) {
+    uploadMessage.textContent = msg;
+    uploadMessage.className = `max-w-4xl mx-auto px-6 pb-4 text-xs font-medium ${type === 'success' ? 'text-green-600' : 'text-red-500'}`;
+  }
+
+  // 启动应用
+  init();
 </script>
 </body>
 </html>

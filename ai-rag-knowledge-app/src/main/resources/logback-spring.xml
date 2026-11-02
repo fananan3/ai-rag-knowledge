@@ -100,6 +100,8 @@
     <!-- 开发环境：控制台打印 -->
     <springProfile name="dev">
         <logger name="com.nmys.view" level="debug"/>
+        <logger name="org.apache.catalina.connector" level="OFF" />
+        <logger name="org.springframework.web.servlet.mvc.method.annotation.ReactiveTypeHandler" level="OFF" />
     </springProfile>
 
     <root level="info">
