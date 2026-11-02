@@ -56,20 +56,24 @@
 
   <!-- 知识库上传面板 -->
   <div id="uploadPanel" class="hidden bg-white border-b border-gray-200 shadow-sm z-10">
-    <div class="max-w-4xl mx-auto p-6 flex gap-6">
+    <!-- 选项卡导航 -->
+    <div class="flex border-b border-gray-100 px-6">
+      <button id="tabLocal" class="py-3 px-4 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600 transition-colors">本地文件上传</button>
+      <button id="tabGit" class="py-3 px-4 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 transition-colors">Git 仓库解析</button>
+    </div>
+
+    <!-- 1. 本地文件上传内容 -->
+    <div id="contentLocal" class="max-w-4xl mx-auto p-6 flex gap-6">
       <div class="w-1/3 flex flex-col justify-center">
         <h3 class="font-semibold text-gray-800 mb-2">知识库导入 (RAG)</h3>
-        <!-- 文案已更新：支持 PDF -->
         <p class="text-xs text-gray-500 leading-relaxed mb-4">上传 md、txt、sql、pdf 文件，系统会自动解析、拆分为向量并存入 PostgreSQL。之后 AI 将根据你的文档进行回答。</p>
         <input type="text" id="ragTagInput" placeholder="输入知识库标签 (ragTag)" class="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 text-sm outline-none bg-gray-50 focus:bg-white mb-2">
       </div>
       <div class="flex-1">
         <div id="dropzone" class="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center cursor-pointer transition-colors duration-200 hover:bg-gray-50 flex flex-col items-center justify-center h-full min-h-[120px]">
-          <!-- accept 已加入 .pdf -->
           <input type="file" id="fileInput" multiple accept=".md,.txt,.sql,.pdf" class="hidden">
           <svg class="w-8 h-8 text-indigo-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
           <p class="text-sm text-gray-600 font-medium">点击或拖拽文件</p>
-          <!-- 提示文案已加入 pdf -->
           <p class="text-xs text-gray-400 mt-1">支持 .md, .txt, .sql, .pdf</p>
         </div>
       </div>
@@ -81,6 +85,31 @@
         </button>
       </div>
     </div>
+
+    <!-- 2. Git 仓库解析内容 -->
+    <div id="contentGit" class="hidden max-w-4xl mx-auto p-6">
+      <div class="flex flex-col gap-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1">Git 仓库地址 (repoUrl)</label>
+          <input type="text" id="gitRepoUrl" placeholder="https://gitee.com/username/repo.git" class="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 text-sm outline-none bg-gray-50 focus:bg-white">
+        </div>
+        <div class="flex gap-4">
+          <div class="flex-1">
+            <label class="block text-xs font-medium text-gray-700 mb-1">用户名 (userName)</label>
+            <input type="text" id="gitUserName" placeholder="选填" class="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 text-sm outline-none bg-gray-50 focus:bg-white">
+          </div>
+          <div class="flex-1">
+            <label class="block text-xs font-medium text-gray-700 mb-1">访问令牌 (token)</label>
+            <input type="password" id="gitToken" placeholder="选填" class="w-full px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 text-sm outline-none bg-gray-50 focus:bg-white">
+          </div>
+        </div>
+        <button id="submitGitBtn" class="w-full py-2.5 bg-gray-800 hover:bg-gray-900 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex justify-center items-center gap-2 mt-2">
+          <span id="gitBtnText">开始克隆并解析</span>
+          <svg id="gitLoadingIcon" class="hidden animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+        </button>
+      </div>
+    </div>
+
     <div id="uploadMessage" class="hidden max-w-4xl mx-auto px-6 pb-4 text-xs font-medium"></div>
   </div>
 
@@ -112,13 +141,12 @@
   let isGenerating = false;
   let filesToUpload = [];
 
-  // 允许的扩展名：加入 .pdf
   const ALLOWED_EXTENSIONS = ['.md', '.txt', '.sql', '.pdf'];
 
+  // DOM 元素
   const chatListContainer = document.getElementById('chatListContainer');
   const newChatBtn = document.getElementById('newChatBtn');
   const currentChatTitle = document.getElementById('currentChatTitle');
-
   const messagesDiv = document.getElementById('messages');
   const welcomeTip = document.getElementById('welcomeTip');
   const chatContainer = document.getElementById('chatContainer');
@@ -127,6 +155,11 @@
 
   const toggleUploadBtn = document.getElementById('toggleUploadBtn');
   const uploadPanel = document.getElementById('uploadPanel');
+  const tabLocal = document.getElementById('tabLocal');
+  const tabGit = document.getElementById('tabGit');
+  const contentLocal = document.getElementById('contentLocal');
+  const contentGit = document.getElementById('contentGit');
+
   const ragTagInput = document.getElementById('ragTagInput');
   const ragTagSelect = document.getElementById('ragTagSelect');
   const dropzone = document.getElementById('dropzone');
@@ -137,23 +170,28 @@
   const uploadLoadingIcon = document.getElementById('uploadLoadingIcon');
   const uploadMessage = document.getElementById('uploadMessage');
 
+  const gitRepoUrl = document.getElementById('gitRepoUrl');
+  const gitUserName = document.getElementById('gitUserName');
+  const gitToken = document.getElementById('gitToken');
+  const submitGitBtn = document.getElementById('submitGitBtn');
+  const gitBtnText = document.getElementById('gitBtnText');
+  const gitLoadingIcon = document.getElementById('gitLoadingIcon');
+
   // ================= 知识库选择 =================
-  // 从后端加载已上传的知识库标签列表，填充头部下拉框
   function loadRagTags() {
     fetch('/api/v1/rag/query_rag_tag_list')
-      .then(res => res.json())
-      .then(res => {
-        if (res.code !== '0000' || !Array.isArray(res.data)) return;
-        const saved = localStorage.getItem('ai_rag_tag') || '';
-        ragTagSelect.innerHTML = '<option value="">不使用知识库（普通对话）</option>' +
-          res.data.map(t => `<option value="${escapeHTML(t)}">${escapeHTML(t)}</option>`).join('');
-        if (res.data.includes(saved)) ragTagSelect.value = saved;
-        else if (res.data.length === 1) ragTagSelect.value = res.data[0];
-      })
-      .catch(e => console.error('加载知识库列表失败', e));
+            .then(res => res.json())
+            .then(res => {
+              if (res.code !== '0000' || !Array.isArray(res.data)) return;
+              const saved = localStorage.getItem('ai_rag_tag') || '';
+              ragTagSelect.innerHTML = '<option value="">不使用知识库（普通对话）</option>' +
+                      res.data.map(t => `<option value="${escapeHTML(t)}">${escapeHTML(t)}</option>`).join('');
+              if (res.data.includes(saved)) ragTagSelect.value = saved;
+              else if (res.data.length === 1) ragTagSelect.value = res.data[0];
+            })
+            .catch(e => console.error('加载知识库列表失败', e));
   }
 
-  // 切换知识库时记住选择，下次打开页面自动恢复
   ragTagSelect.addEventListener('change', () => {
     localStorage.setItem('ai_rag_tag', ragTagSelect.value);
   });
@@ -341,7 +379,6 @@
     isGenerating = true;
     sendBtn.disabled = true;
 
-    // 用头部下拉框选中的知识库标签检索，ragTag 为空时后端自动退化为普通对话
     const ragTag = ragTagSelect.value;
     const API_URL = `/api/v1/ollama/generate_stream_with_rag?model=deepseek-r1:1.5b&message=${encodeURIComponent(message)}&ragTag=${encodeURIComponent(ragTag)}`;
 
@@ -392,11 +429,30 @@
     }
   }
 
-  // ================= 上传面板逻辑 =================
+  // ================= 面板 Tabs 切换逻辑 =================
   toggleUploadBtn.addEventListener('click', () => {
     uploadPanel.classList.toggle('hidden');
   });
 
+  tabLocal.addEventListener('click', () => {
+    tabLocal.classList.replace('border-transparent', 'border-indigo-600');
+    tabLocal.classList.replace('text-gray-500', 'text-indigo-600');
+    tabGit.classList.replace('border-indigo-600', 'border-transparent');
+    tabGit.classList.replace('text-indigo-600', 'text-gray-500');
+    contentLocal.classList.remove('hidden');
+    contentGit.classList.add('hidden');
+  });
+
+  tabGit.addEventListener('click', () => {
+    tabGit.classList.replace('border-transparent', 'border-indigo-600');
+    tabGit.classList.replace('text-gray-500', 'text-indigo-600');
+    tabLocal.classList.replace('border-indigo-600', 'border-transparent');
+    tabLocal.classList.replace('text-indigo-600', 'text-gray-500');
+    contentGit.classList.remove('hidden');
+    contentLocal.classList.add('hidden');
+  });
+
+  // ================= 本地文件上传逻辑 =================
   dropzone.addEventListener('click', () => fileInput.click());
   dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dropzone-active'); });
   dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dropzone-active'));
@@ -462,7 +518,6 @@
         showUploadMsg('🎉 上传解析成功，AI 正在学习中！', 'success');
         filesToUpload = [];
         renderFileList();
-        // 刷新知识库下拉列表并自动选中刚上传的标签，接下来对话即可检索该知识库
         localStorage.setItem('ai_rag_tag', ragTag);
         loadRagTags();
       } else {
@@ -484,6 +539,60 @@
       uploadBtnText.textContent = '开始解析';
       submitUploadBtn.disabled = false;
       uploadLoadingIcon.classList.add('hidden');
+    }
+  }
+
+  // ================= Git 仓库解析逻辑 =================
+  submitGitBtn.addEventListener('click', async () => {
+    const repoUrl = gitRepoUrl.value.trim();
+    const userName = gitUserName.value.trim();
+    const token = gitToken.value.trim();
+
+    if (!repoUrl) { showUploadMsg('请输入 Git 仓库地址', 'error'); return; }
+
+    setGitLoading(true);
+
+    const formData = new FormData();
+    formData.append('repoUrl', repoUrl);
+    formData.append('userName', userName);
+    formData.append('token', token);
+
+    try {
+      const response = await fetch('/api/v1/rag/analyze_git_repository', {
+        method: 'POST',
+        body: formData
+      });
+      const res = await response.json();
+
+      if (res.code === '0000') {
+        showUploadMsg('🎉 Git 仓库解析成功！', 'success');
+        // 提取项目名作为 ragTag
+        const parts = repoUrl.split('/');
+        const lastPart = parts[parts.length - 1];
+        const repoProjectName = lastPart.replace('.git', '');
+
+        localStorage.setItem('ai_rag_tag', repoProjectName);
+        loadRagTags();
+        gitRepoUrl.value = ''; // 清空输入框
+      } else {
+        showUploadMsg(`❌ 解析失败: ${res.info || '未知错误'}`, 'error');
+      }
+    } catch (error) {
+      showUploadMsg('❌ 网络请求失败，请检查后端服务', 'error');
+    } finally {
+      setGitLoading(false);
+    }
+  });
+
+  function setGitLoading(isLoading) {
+    if (isLoading) {
+      gitBtnText.textContent = '克隆并解析中 (可能需要几分钟)...';
+      submitGitBtn.disabled = true;
+      gitLoadingIcon.classList.remove('hidden');
+    } else {
+      gitBtnText.textContent = '开始克隆并解析';
+      submitGitBtn.disabled = false;
+      gitLoadingIcon.classList.add('hidden');
     }
   }
 

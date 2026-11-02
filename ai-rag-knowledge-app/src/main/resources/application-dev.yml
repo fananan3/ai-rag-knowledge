@@ -4,8 +4,9 @@ server:
 spring:
   datasource:
     driver-class-name: org.postgresql.Driver
-    username: postgres
-    password: postgres
+    # 使用专用业务账号，避免依赖 postgres 超级用户（曾被改 NOLOGIN 导致启动失败）
+    username: airag
+    password: airag123
     url: jdbc:postgresql://117.72.123.254:15432/ai-rag-knowledge
     type: com.zaxxer.hikari.HikariDataSource
     # hikari连接池配置
@@ -18,6 +19,8 @@ spring:
       idle-timeout: 600000
       # 连接池最大连接数，默认是10
       maximum-pool-size: 10
+      # 定期对池内空闲连接发送探活查询(SELECT 1)，防止长任务期间连接被防火墙/NAT 掐断
+      keepalive-time: 30000
       # 此属性控制从池返回的连接的默认自动提交行为,默认值：true
       auto-commit: true
       # 此属性控制池中连接的最长生命周期，值0表示无限生命周期，默认30分钟

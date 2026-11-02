@@ -54,7 +54,8 @@ services:
         condition: service_healthy
 
   vector_db:
-    image: registry.cn-hangzhou.aliyuncs.com/xfg-studio/pgvector:v0.5.0
+    # 注意：服务器上实际跑的是 pgvector/pgvector:pg15，请保持与此一致，避免镜像不一致导致行为漂移
+    image: pgvector/pgvector:pg15
     container_name: vector_db
     restart: always
     environment:
@@ -64,6 +65,8 @@ services:
       - PGPASSWORD=postgres
     volumes:
       - ./pgvector/sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      # 命名卷：让 PG 数据生命周期可控（匿名卷在容器重建时容易"删不干净"导致状态残留）
+      - pgdata:/var/lib/postgresql/data
     logging:
       options:
         max-size: 10m
@@ -77,6 +80,9 @@ services:
       retries: 10
     networks:
       - my-network
+
+volumes:
+  pgdata:
 
 networks:
   my-network:
